@@ -1,0 +1,32 @@
+USE YourDatabaseName; -- Replace with your actual database name
+
+-- Create a temporary table to hold the list of orphaned users
+CREATE TABLE #OrphanedUsers (
+    UserName NVARCHAR(128),
+    UserType NVARCHAR(60),
+    DatabaseName NVARCHAR(128)
+);
+
+-- Insert orphaned users into the temporary table
+INSERT INTO #OrphanedUsers
+EXEC sp_MSforeachdb '
+    USE [?];
+    INSERT INTO #OrphanedUsers (UserName, UserType, DatabaseName)
+    SELECT
+        dp.name AS UserName,
+        dp.type_desc AS UserType,
+        ''?'' AS DatabaseName
+    FROM sys.database_principals AS dp
+    LEFT JOIN sys.server_principals AS sp ON dp.sid = sp.sid
+    WHERE dp.type_desc IN (''SQL_USER'', ''WINDOWS_USER'', ''WINDOWS_GROUP'')
+        AND sp.sid IS NULL
+        AND dp.name <> ''guest''
+        AND dp.name <> ''dbo''
+';
+
+-- Select orphaned users from the temporary table
+SELECT UserName, UserType, DatabaseName
+FROM #OrphanedUsers;
+
+-- Drop the temporary table
+DROP TABLE #OrphanedUsers;
